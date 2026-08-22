@@ -2556,19 +2556,27 @@ export default function CalgaryBarbellApp({ userEmail }) {
     })();
   }, []);
 
-  /* ---- load session whenever the viewed day changes ---- */
+  /* ---- show the viewed day's session whenever it changes ----
+     allSessions already holds every logged session, loaded once in a
+     single bulk request on mount (used for Week Overview badges,
+     Calendar, Insights, etc.) — so switching days just needs to read
+     the matching entry out of memory. No network round-trip here,
+     which is what used to cause a visible delay on every day change
+     once sessions started living in the cloud instead of localStorage. */
+  const allSessionsRef = useRef(allSessions);
   useEffect(() => {
-    let cancelled = false;
+    allSessionsRef.current = allSessions;
+  }, [allSessions]);
+
+  useEffect(() => {
     setExpandedIdx(null);
     setShowWorkoutComplete(false);
-    (async () => {
-      const saved = await storageGet(skey, null);
-      if (!cancelled) setSession(saved || EMPTY_SESSION());
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [skey]);
+    const existing = allSessionsRef.current[`${absWeek}:${absDay}`];
+    setSession(existing || EMPTY_SESSION());
+    // Re-run once the initial bulk load finishes too, in case this effect
+    // ran before allSessions had loaded for the very first day shown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skey, loadingHistory]);
 
   const persistSession = useCallback(
     (next) => {
